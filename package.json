@@ -4,7 +4,11 @@
   "description": "Generate graphs and diagrams with Gemini AI inside VS Code",
   "icon": "media/icon.png",
   "version": "0.0.2",
-  "publisher": "verri",
+  "publisher": "guilherme-verri",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/gverri/vscode-nanobanana"
+  },
   "license": "MIT",
   "engines": {
     "vscode": "^1.85.0"
