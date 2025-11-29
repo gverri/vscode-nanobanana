@@ -80,6 +80,19 @@ export class PrePromptService {
     return newPrePrompt;
   }
 
+  async updatePrePrompt(id: string, name: string, prompt: string): Promise<boolean> {
+    const custom = this.context.globalState.get<PrePrompt[]>(STORAGE_KEY) || [];
+    const index = custom.findIndex((p) => p.id === id);
+
+    if (index === -1) {
+      return false;
+    }
+
+    custom[index] = { ...custom[index], name, prompt };
+    await this.context.globalState.update(STORAGE_KEY, custom);
+    return true;
+  }
+
   async deletePrePrompt(id: string): Promise<boolean> {
     const custom = this.context.globalState.get<PrePrompt[]>(STORAGE_KEY) || [];
     const prePrompt = custom.find((p) => p.id === id);

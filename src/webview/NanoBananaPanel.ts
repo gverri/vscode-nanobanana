@@ -77,8 +77,14 @@ export class NanoBananaViewProvider implements vscode.WebviewViewProvider {
           case "addPrePrompt":
             await this.handleAddPrePrompt(message.name, message.prompt);
             break;
+          case "updatePrePrompt":
+            await this.handleUpdatePrePrompt(message.id, message.name, message.prompt);
+            break;
           case "deletePrePrompt":
             await this.handleDeletePrePrompt(message.id);
+            break;
+          case "confirmDeletePrePrompt":
+            await this.handleConfirmDeletePrePrompt(message.id);
             break;
           case "getSelection":
             this.handleGetSelection();
@@ -272,6 +278,43 @@ export class NanoBananaViewProvider implements vscode.WebviewViewProvider {
         error instanceof Error
           ? error.message
           : "Failed to delete diagram type";
+      this.postMessage({ command: "error", message });
+    }
+  }
+
+  private async handleConfirmDeletePrePrompt(id: string): Promise<void> {
+    const prePrompt = this.prePromptService.getPrePromptById(id);
+    if (!prePrompt) {
+      return;
+    }
+
+    const answer = await vscode.window.showWarningMessage(
+      `Delete "${prePrompt.name}"?`,
+      { modal: true },
+      "Delete"
+    );
+
+    if (answer === "Delete") {
+      this.postMessage({ command: "confirmDelete", id });
+    }
+  }
+
+  private async handleUpdatePrePrompt(
+    id: string,
+    name: string,
+    prompt: string
+  ): Promise<void> {
+    try {
+      const updated = await this.prePromptService.updatePrePrompt(id, name, prompt);
+      if (!updated) {
+        throw new Error("Cannot update this diagram type.");
+      }
+      const prePrompts = this.prePromptService.getAllPrePrompts();
+      this.postMessage({ command: "prePromptsUpdated", prePrompts });
+      vscode.window.showInformationMessage(`Diagram type "${name}" updated!`);
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Failed to update diagram type";
       this.postMessage({ command: "error", message });
     }
   }
@@ -1205,6 +1248,9 @@ export class NanoBananaViewProvider implements vscode.WebviewViewProvider {
         <button id="add-preprompt-btn" class="icon-btn secondary" title="Add custom type">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
         </button>
+        <button id="edit-preprompt-btn" class="icon-btn secondary hidden" title="Edit type">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+        </button>
         <button id="delete-preprompt-btn" class="icon-btn danger hidden" title="Delete type">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg>
         </button>
@@ -1279,12 +1325,12 @@ export class NanoBananaViewProvider implements vscode.WebviewViewProvider {
     </div>
   </section>
 
-  <!-- Add Pre-Prompt Modal -->
+  <!-- Add/Edit Pre-Prompt Modal -->
   <div id="add-modal" class="modal-overlay hidden">
     <div class="modal">
       <div class="modal-header">
-        <div class="modal-title">New Image Type</div>
-        <div class="modal-description">Create a custom template for generating images.</div>
+        <div class="modal-title" id="modal-title">New Image Type</div>
+        <div class="modal-description" id="modal-description">Create a custom template for generating images.</div>
       </div>
       <div class="form-group">
         <label for="new-preprompt-name">Name</label>
@@ -1311,7 +1357,8 @@ export class NanoBananaViewProvider implements vscode.WebviewViewProvider {
         prePrompts: [],
         selection: null,
         currentImage: null,
-        config: { aspectRatio: '16:9', model: 'gemini-3-pro-image-preview' }
+        config: { aspectRatio: '16:9', model: 'gemini-3-pro-image-preview' },
+        editingId: null
       };
 
       // Elements
@@ -1323,6 +1370,7 @@ export class NanoBananaViewProvider implements vscode.WebviewViewProvider {
         changeKeyBtn: document.getElementById('change-key-btn'),
         prepromptSelect: document.getElementById('preprompt-select'),
         addPrepromptBtn: document.getElementById('add-preprompt-btn'),
+        editPrepromptBtn: document.getElementById('edit-preprompt-btn'),
         deletePrepromptBtn: document.getElementById('delete-preprompt-btn'),
         selectionIndicator: document.getElementById('selection-indicator'),
         lineCount: document.getElementById('line-count'),
@@ -1338,6 +1386,8 @@ export class NanoBananaViewProvider implements vscode.WebviewViewProvider {
         openOsBtn: document.getElementById('open-os-btn'),
         regenerateBtn: document.getElementById('regenerate-btn'),
         addModal: document.getElementById('add-modal'),
+        modalTitle: document.getElementById('modal-title'),
+        modalDescription: document.getElementById('modal-description'),
         newPrepromptName: document.getElementById('new-preprompt-name'),
         newPrepromptPrompt: document.getElementById('new-preprompt-prompt'),
         savePrepromptBtn: document.getElementById('save-preprompt-btn'),
@@ -1354,13 +1404,14 @@ export class NanoBananaViewProvider implements vscode.WebviewViewProvider {
         if (currentValue && state.prePrompts.some(p => p.id === currentValue)) {
           el.prepromptSelect.value = currentValue;
         }
-        updateDeleteButton();
+        updateTypeButtons();
       }
 
-      // Update delete button based on current selection
-      function updateDeleteButton() {
+      // Update edit/delete buttons based on current selection
+      function updateTypeButtons() {
         const selectedId = el.prepromptSelect.value;
         const isDefault = state.prePrompts.find(p => p.id === selectedId)?.isDefault ?? true;
+        el.editPrepromptBtn.classList.toggle('hidden', isDefault);
         el.deletePrepromptBtn.classList.toggle('hidden', isDefault);
       }
 
@@ -1423,18 +1474,36 @@ export class NanoBananaViewProvider implements vscode.WebviewViewProvider {
         updateUI();
       });
 
-      el.prepromptSelect.addEventListener('change', updateDeleteButton);
+      el.prepromptSelect.addEventListener('change', updateTypeButtons);
 
       el.addPrepromptBtn.addEventListener('click', () => {
-        el.addModal.classList.remove('hidden');
+        state.editingId = null;
+        el.modalTitle.textContent = 'New Image Type';
+        el.modalDescription.textContent = 'Create a custom template for generating images.';
+        el.savePrepromptBtn.textContent = 'Create Type';
         el.newPrepromptName.value = '';
         el.newPrepromptPrompt.value = '';
+        el.addModal.classList.remove('hidden');
+      });
+
+      el.editPrepromptBtn.addEventListener('click', () => {
+        const selectedId = el.prepromptSelect.value;
+        const prePrompt = state.prePrompts.find(p => p.id === selectedId);
+        if (!prePrompt || prePrompt.isDefault) return;
+
+        state.editingId = selectedId;
+        el.modalTitle.textContent = 'Edit Image Type';
+        el.modalDescription.textContent = 'Update the template for this image type.';
+        el.savePrepromptBtn.textContent = 'Save Changes';
+        el.newPrepromptName.value = prePrompt.name;
+        el.newPrepromptPrompt.value = prePrompt.prompt;
+        el.addModal.classList.remove('hidden');
       });
 
       el.deletePrepromptBtn.addEventListener('click', () => {
         const selectedId = el.prepromptSelect.value;
-        if (selectedId && confirm('Delete this diagram type?')) {
-          vscode.postMessage({ command: 'deletePrePrompt', id: selectedId });
+        if (selectedId) {
+          vscode.postMessage({ command: 'confirmDeletePrePrompt', id: selectedId });
         }
       });
 
@@ -1472,13 +1541,19 @@ export class NanoBananaViewProvider implements vscode.WebviewViewProvider {
         const name = el.newPrepromptName.value.trim();
         const prompt = el.newPrepromptPrompt.value.trim();
         if (name && prompt) {
-          vscode.postMessage({ command: 'addPrePrompt', name, prompt });
+          if (state.editingId) {
+            vscode.postMessage({ command: 'updatePrePrompt', id: state.editingId, name, prompt });
+          } else {
+            vscode.postMessage({ command: 'addPrePrompt', name, prompt });
+          }
           el.addModal.classList.add('hidden');
+          state.editingId = null;
         }
       });
 
       el.cancelPrepromptBtn.addEventListener('click', () => {
         el.addModal.classList.add('hidden');
+        state.editingId = null;
       });
 
       // Handle messages from extension
@@ -1513,6 +1588,9 @@ export class NanoBananaViewProvider implements vscode.WebviewViewProvider {
           case 'apiKeyUpdated':
             state.hasApiKey = message.hasApiKey;
             updateUI();
+            break;
+          case 'confirmDelete':
+            vscode.postMessage({ command: 'deletePrePrompt', id: message.id });
             break;
         }
       });

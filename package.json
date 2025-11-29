@@ -3,7 +3,7 @@
   "displayName": "VS Code: Nano Banana",
   "description": "Generate graphs and diagrams with Gemini AI inside VS Code",
   "icon": "media/icon.png",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "publisher": "guilherme-verri",
   "repository": {
     "type": "git",

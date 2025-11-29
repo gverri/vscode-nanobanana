@@ -30,7 +30,9 @@ export type WebviewMessage =
   | { command: 'downloadImage'; base64: string; filename: string }
   | { command: 'openInOS'; base64: string }
   | { command: 'addPrePrompt'; name: string; prompt: string }
+  | { command: 'updatePrePrompt'; id: string; name: string; prompt: string }
   | { command: 'deletePrePrompt'; id: string }
+  | { command: 'confirmDeletePrePrompt'; id: string }
   | { command: 'getSelection' };
 
 // Messages from Extension to Webview
@@ -41,4 +43,5 @@ export type ExtensionMessage =
   | { command: 'error'; message: string }
   | { command: 'prePromptsUpdated'; prePrompts: PrePrompt[] }
   | { command: 'selectionChanged'; selection: SelectionInfo | null }
-  | { command: 'apiKeyUpdated'; hasApiKey: boolean };
+  | { command: 'apiKeyUpdated'; hasApiKey: boolean }
+  | { command: 'confirmDelete'; id: string };
