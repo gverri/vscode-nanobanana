@@ -3,4 +3,14 @@
 .claude
 .agent
 
+# Dependencies
 node_modules
+
+# Build output
+out/
+
+# Package files
+*.vsix
+
+# OS
+.DS_Store
