@@ -1,9 +1,10 @@
 {
   "name": "vscode-nanobanana",
-  "displayName": "Nano Banana",
+  "displayName": "VS Code: Nano Banana",
   "description": "Generate graphs and diagrams with Gemini AI inside VS Code",
-  "version": "0.0.1",
-  "publisher": "nanobanana",
+  "icon": "media/icon.png",
+  "version": "0.0.2",
+  "publisher": "verri",
   "license": "MIT",
   "engines": {
     "vscode": "^1.85.0"
