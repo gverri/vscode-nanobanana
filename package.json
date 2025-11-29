@@ -23,6 +23,24 @@
   "activationEvents": [],
   "main": "./out/extension.js",
   "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "nanobanana",
+          "title": "Nano Banana",
+          "icon": "media/icon.svg"
+        }
+      ]
+    },
+    "views": {
+      "nanobanana": [
+        {
+          "type": "webview",
+          "id": "nanobanana.view",
+          "name": "Nano Banana"
+        }
+      ]
+    },
     "commands": [
       {
         "command": "nanobanana.open",

@@ -1,22 +1,30 @@
 import * as vscode from 'vscode';
-import { NanoBananaPanel } from './webview/NanoBananaPanel';
+import { NanoBananaViewProvider } from './webview/NanoBananaPanel';
 import { StorageManager } from './storage/storageManager';
 
 export function activate(context: vscode.ExtensionContext): void {
   console.log('Nano Banana extension is now active');
 
   const storageManager = new StorageManager(context);
+  const provider = new NanoBananaViewProvider(context);
 
-  // Register command to open the main panel
+  // Register the webview view provider for the sidebar
+  const viewProvider = vscode.window.registerWebviewViewProvider(
+    NanoBananaViewProvider.viewType,
+    provider
+  );
+
+  // Register command to focus the sidebar view
   const openCommand = vscode.commands.registerCommand('nanobanana.open', () => {
-    NanoBananaPanel.createOrShow(context);
+    vscode.commands.executeCommand('nanobanana.view.focus');
   });
 
   // Register command to generate with selection
   const generateWithSelectionCommand = vscode.commands.registerCommand(
     'nanobanana.generateWithSelection',
     () => {
-      NanoBananaPanel.createWithSelection(context);
+      vscode.commands.executeCommand('nanobanana.view.focus');
+      provider.sendSelectionUpdate();
     }
   );
 
@@ -35,7 +43,12 @@ export function activate(context: vscode.ExtensionContext): void {
     }
   });
 
-  context.subscriptions.push(openCommand, generateWithSelectionCommand, setApiKeyCommand);
+  context.subscriptions.push(
+    viewProvider,
+    openCommand,
+    generateWithSelectionCommand,
+    setApiKeyCommand
+  );
 }
 
 export function deactivate(): void {

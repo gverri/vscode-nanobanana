@@ -7,65 +7,49 @@ import { GeminiService } from '../services/geminiService';
 import { PrePromptService } from '../services/prePromptService';
 import type { WebviewMessage, ExtensionMessage, SelectionInfo } from '../types';
 
-export class NanoBananaPanel {
-  public static currentPanel: NanoBananaPanel | undefined;
-  private static readonly viewType = 'nanoBanana';
+export class NanoBananaViewProvider implements vscode.WebviewViewProvider {
+  public static readonly viewType = 'nanobanana.view';
 
-  private readonly panel: vscode.WebviewPanel;
+  private view?: vscode.WebviewView;
   private readonly extensionUri: vscode.Uri;
   private readonly storageManager: StorageManager;
   private readonly geminiService: GeminiService;
   private readonly prePromptService: PrePromptService;
   private disposables: vscode.Disposable[] = [];
 
-  public static createOrShow(context: vscode.ExtensionContext): NanoBananaPanel {
-    const column = vscode.window.activeTextEditor?.viewColumn || vscode.ViewColumn.One;
-
-    if (NanoBananaPanel.currentPanel) {
-      NanoBananaPanel.currentPanel.panel.reveal(column);
-      return NanoBananaPanel.currentPanel;
-    }
-
-    const panel = vscode.window.createWebviewPanel(
-      NanoBananaPanel.viewType,
-      'Nano Banana',
-      column,
-      {
-        enableScripts: true,
-        localResourceRoots: [vscode.Uri.joinPath(context.extensionUri, 'media')],
-        retainContextWhenHidden: true,
-      }
-    );
-
-    NanoBananaPanel.currentPanel = new NanoBananaPanel(panel, context);
-    return NanoBananaPanel.currentPanel;
-  }
-
-  public static async createWithSelection(context: vscode.ExtensionContext): Promise<NanoBananaPanel> {
-    const panel = NanoBananaPanel.createOrShow(context);
-    const selection = NanoBananaPanel.getSelectedText();
-    if (selection) {
-      panel.postMessage({ command: 'selectionChanged', selection });
-    }
-    return panel;
-  }
-
-  private constructor(panel: vscode.WebviewPanel, context: vscode.ExtensionContext) {
-    this.panel = panel;
+  constructor(context: vscode.ExtensionContext) {
     this.extensionUri = context.extensionUri;
     this.storageManager = new StorageManager(context);
     this.geminiService = new GeminiService();
     this.prePromptService = new PrePromptService(context);
+  }
 
-    this.panel.webview.html = this.getHtmlContent();
+  public resolveWebviewView(
+    webviewView: vscode.WebviewView,
+    _context: vscode.WebviewViewResolveContext,
+    _token: vscode.CancellationToken
+  ): void {
+    this.view = webviewView;
+
+    webviewView.webview.options = {
+      enableScripts: true,
+      localResourceRoots: [vscode.Uri.joinPath(this.extensionUri, 'media')],
+    };
+
+    webviewView.webview.html = this.getHtmlContent();
     this.setupMessageListener();
     this.setupSelectionListener();
 
-    this.panel.onDidDispose(() => this.dispose(), null, this.disposables);
+    webviewView.onDidDispose(() => this.dispose(), null, this.disposables);
+  }
+
+  public sendSelectionUpdate(): void {
+    const selection = this.getSelectedText();
+    this.postMessage({ command: 'selectionChanged', selection });
   }
 
   private setupMessageListener(): void {
-    this.panel.webview.onDidReceiveMessage(
+    this.view?.webview.onDidReceiveMessage(
       async (message: WebviewMessage) => {
         switch (message.command) {
           case 'ready':
@@ -105,7 +89,7 @@ export class NanoBananaPanel {
   private setupSelectionListener(): void {
     vscode.window.onDidChangeTextEditorSelection(
       () => {
-        const selection = NanoBananaPanel.getSelectedText();
+        const selection = this.getSelectedText();
         this.postMessage({ command: 'selectionChanged', selection });
       },
       null,
@@ -116,7 +100,7 @@ export class NanoBananaPanel {
   private async handleReady(): Promise<void> {
     const hasApiKey = await this.storageManager.hasApiKey();
     const prePrompts = this.prePromptService.getAllPrePrompts();
-    const selection = NanoBananaPanel.getSelectedText();
+    const selection = this.getSelectedText();
     const config = vscode.workspace.getConfiguration('nanobanana');
 
     if (hasApiKey) {
@@ -161,7 +145,7 @@ export class NanoBananaPanel {
 
       let content = userContent;
       if (useSelection) {
-        const selection = NanoBananaPanel.getSelectedText();
+        const selection = this.getSelectedText();
         if (selection) {
           content = selection.text;
         }
@@ -266,11 +250,11 @@ export class NanoBananaPanel {
   }
 
   private handleGetSelection(): void {
-    const selection = NanoBananaPanel.getSelectedText();
+    const selection = this.getSelectedText();
     this.postMessage({ command: 'selectionChanged', selection });
   }
 
-  private static getSelectedText(): SelectionInfo | null {
+  private getSelectedText(): SelectionInfo | null {
     const editor = vscode.window.activeTextEditor;
     if (!editor) {
       return null;
@@ -292,7 +276,7 @@ export class NanoBananaPanel {
   }
 
   private postMessage(message: ExtensionMessage): void {
-    this.panel.webview.postMessage(message);
+    this.view?.webview.postMessage(message);
   }
 
   private getHtmlContent(): string {
@@ -307,7 +291,7 @@ export class NanoBananaPanel {
   <title>Nano Banana</title>
   <style>
     :root {
-      --container-padding: 20px;
+      --container-padding: 12px;
       --input-padding: 8px 12px;
       --border-radius: 4px;
     }
@@ -321,34 +305,36 @@ export class NanoBananaPanel {
       color: var(--vscode-foreground);
       font-size: var(--vscode-font-size);
       font-family: var(--vscode-font-family);
-      background-color: var(--vscode-editor-background);
+      background-color: var(--vscode-sideBar-background);
       line-height: 1.5;
+      margin: 0;
     }
 
     h1 {
-      font-size: 1.5em;
-      margin: 0 0 16px 0;
+      font-size: 1.3em;
+      margin: 0 0 12px 0;
       display: flex;
       align-items: center;
       gap: 8px;
     }
 
     h2 {
-      font-size: 1.1em;
-      margin: 0 0 12px 0;
+      font-size: 1em;
+      margin: 0 0 8px 0;
       color: var(--vscode-descriptionForeground);
     }
 
     .hidden { display: none !important; }
 
     section {
-      margin-bottom: 24px;
+      margin-bottom: 16px;
     }
 
     label {
       display: block;
-      margin-bottom: 6px;
+      margin-bottom: 4px;
       font-weight: 500;
+      font-size: 0.9em;
     }
 
     input[type="text"],
@@ -373,12 +359,12 @@ export class NanoBananaPanel {
     }
 
     textarea {
-      min-height: 100px;
+      min-height: 80px;
       resize: vertical;
     }
 
     button {
-      padding: 8px 16px;
+      padding: 6px 12px;
       border: none;
       border-radius: var(--border-radius);
       background-color: var(--vscode-button-background);
@@ -413,17 +399,17 @@ export class NanoBananaPanel {
     }
 
     button.icon-btn {
-      padding: 6px 10px;
-      font-size: 1.1em;
+      padding: 4px 8px;
+      font-size: 1em;
     }
 
     .form-group {
-      margin-bottom: 16px;
+      margin-bottom: 12px;
     }
 
     .form-row {
       display: flex;
-      gap: 8px;
+      gap: 6px;
       align-items: flex-end;
     }
 
@@ -437,17 +423,17 @@ export class NanoBananaPanel {
 
     .btn-group {
       display: flex;
-      gap: 8px;
+      gap: 6px;
       flex-wrap: wrap;
     }
 
     .selection-indicator {
-      padding: 8px 12px;
+      padding: 6px 10px;
       background-color: var(--vscode-inputValidation-infoBackground);
       border: 1px solid var(--vscode-inputValidation-infoBorder);
       border-radius: var(--border-radius);
-      margin-bottom: 12px;
-      font-size: 0.9em;
+      margin-bottom: 10px;
+      font-size: 0.85em;
     }
 
     .loading {
@@ -455,15 +441,15 @@ export class NanoBananaPanel {
       flex-direction: column;
       align-items: center;
       justify-content: center;
-      padding: 40px;
-      gap: 16px;
+      padding: 30px;
+      gap: 12px;
     }
 
     .spinner {
-      width: 48px;
-      height: 48px;
-      border: 4px solid var(--vscode-editor-background);
-      border-top: 4px solid var(--vscode-button-background);
+      width: 36px;
+      height: 36px;
+      border: 3px solid var(--vscode-sideBar-background);
+      border-top: 3px solid var(--vscode-button-background);
       border-radius: 50%;
       animation: spin 1s linear infinite;
     }
@@ -481,21 +467,23 @@ export class NanoBananaPanel {
       max-width: 100%;
       border-radius: var(--border-radius);
       border: 1px solid var(--vscode-panel-border);
-      margin-bottom: 16px;
+      margin-bottom: 12px;
     }
 
     .error {
-      padding: 12px;
+      padding: 10px;
       background-color: var(--vscode-inputValidation-errorBackground);
       border: 1px solid var(--vscode-inputValidation-errorBorder);
       border-radius: var(--border-radius);
       color: var(--vscode-inputValidation-errorForeground);
-      margin-bottom: 16px;
+      margin-bottom: 12px;
+      font-size: 0.9em;
     }
 
     .link {
       color: var(--vscode-textLink-foreground);
       text-decoration: none;
+      font-size: 0.9em;
     }
 
     .link:hover {
@@ -505,29 +493,29 @@ export class NanoBananaPanel {
     .divider {
       height: 1px;
       background-color: var(--vscode-panel-border);
-      margin: 20px 0;
+      margin: 16px 0;
     }
 
     .api-key-section {
-      padding: 20px;
-      background-color: var(--vscode-sideBar-background);
+      padding: 12px;
+      background-color: var(--vscode-editor-background);
       border-radius: var(--border-radius);
       border: 1px solid var(--vscode-panel-border);
+    }
+
+    .api-key-section p {
+      font-size: 0.85em;
+      margin: 0 0 10px 0;
     }
 
     .settings-row {
       display: flex;
       justify-content: space-between;
       align-items: center;
-      padding: 8px 0;
-      border-bottom: 1px solid var(--vscode-panel-border);
+      padding: 6px 0;
+      font-size: 0.9em;
     }
 
-    .settings-row:last-child {
-      border-bottom: none;
-    }
-
-    /* Add Pre-Prompt Modal */
     .modal-overlay {
       position: fixed;
       top: 0;
@@ -545,9 +533,9 @@ export class NanoBananaPanel {
       background-color: var(--vscode-editor-background);
       border: 1px solid var(--vscode-panel-border);
       border-radius: var(--border-radius);
-      padding: 20px;
-      width: 90%;
-      max-width: 500px;
+      padding: 16px;
+      width: 95%;
+      max-width: 400px;
     }
 
     .modal h2 {
@@ -560,8 +548,8 @@ export class NanoBananaPanel {
 
   <!-- API Key Setup Section -->
   <section id="api-setup" class="api-key-section">
-    <h2>Setup Your Gemini API Key</h2>
-    <p>To generate diagrams, you need a Gemini API key from Google AI Studio.</p>
+    <h2>Setup Gemini API Key</h2>
+    <p>Get a key from Google AI Studio to generate diagrams.</p>
     <div class="form-group">
       <input type="password" id="api-key-input" placeholder="Enter your Gemini API key">
     </div>
@@ -585,25 +573,25 @@ export class NanoBananaPanel {
 
     <!-- Selection Indicator -->
     <div id="selection-indicator" class="selection-indicator hidden">
-      <strong>Selected Text:</strong> <span id="line-count">0</span> lines selected
+      <strong>Selected:</strong> <span id="line-count">0</span> lines
     </div>
 
     <!-- Prompt Input -->
     <div class="form-group">
       <label for="prompt-input">Description</label>
-      <textarea id="prompt-input" placeholder="Describe your diagram... (e.g., 'User authentication flow with login, 2FA, and session management')"></textarea>
+      <textarea id="prompt-input" placeholder="Describe your diagram..."></textarea>
     </div>
 
     <!-- Generate Buttons -->
     <div class="btn-group">
-      <button id="generate-btn">Generate Diagram</button>
-      <button id="generate-selection-btn" class="hidden">Generate from Selection</button>
+      <button id="generate-btn">Generate</button>
+      <button id="generate-selection-btn" class="hidden">From Selection</button>
     </div>
 
     <!-- Loading State -->
     <div id="loading" class="loading hidden">
       <div class="spinner"></div>
-      <p>Generating your diagram...</p>
+      <p>Generating...</p>
     </div>
 
     <!-- Error Display -->
@@ -614,8 +602,8 @@ export class NanoBananaPanel {
       <img id="generated-image" alt="Generated diagram">
       <div class="btn-group" style="justify-content: center;">
         <button id="download-btn">Download</button>
-        <button id="open-os-btn" class="secondary">Open in OS</button>
-        <button id="regenerate-btn" class="secondary">Regenerate</button>
+        <button id="open-os-btn" class="secondary">Open</button>
+        <button id="regenerate-btn" class="secondary">Redo</button>
       </div>
     </div>
 
@@ -624,21 +612,21 @@ export class NanoBananaPanel {
     <!-- Settings -->
     <div class="settings-row">
       <span>API Key</span>
-      <button id="change-key-btn" class="secondary">Change Key</button>
+      <button id="change-key-btn" class="secondary">Change</button>
     </div>
   </section>
 
   <!-- Add Pre-Prompt Modal -->
   <div id="add-modal" class="modal-overlay hidden">
     <div class="modal">
-      <h2>Add Custom Diagram Type</h2>
+      <h2>Add Diagram Type</h2>
       <div class="form-group">
         <label for="new-preprompt-name">Name</label>
         <input type="text" id="new-preprompt-name" placeholder="e.g., Data Flow Diagram">
       </div>
       <div class="form-group">
         <label for="new-preprompt-prompt">Prompt Template</label>
-        <textarea id="new-preprompt-prompt" placeholder="e.g., data flow diagram, processes, data stores, external entities, arrows showing data movement"></textarea>
+        <textarea id="new-preprompt-prompt" placeholder="e.g., data flow diagram with processes and data stores"></textarea>
       </div>
       <div class="btn-group">
         <button id="save-preprompt-btn">Save</button>
@@ -689,27 +677,37 @@ export class NanoBananaPanel {
         cancelPrepromptBtn: document.getElementById('cancel-preprompt-btn'),
       };
 
+      // Rebuild dropdown only when prePrompts change
+      function updateDropdown() {
+        const currentValue = el.prepromptSelect.value;
+        el.prepromptSelect.innerHTML = state.prePrompts.map(p =>
+          '<option value="' + p.id + '">' + p.name + '</option>'
+        ).join('');
+        // Restore selection if it still exists
+        if (currentValue && state.prePrompts.some(p => p.id === currentValue)) {
+          el.prepromptSelect.value = currentValue;
+        }
+        updateDeleteButton();
+      }
+
+      // Update delete button based on current selection
+      function updateDeleteButton() {
+        const selectedId = el.prepromptSelect.value;
+        const isDefault = state.prePrompts.find(p => p.id === selectedId)?.isDefault ?? true;
+        el.deletePrepromptBtn.classList.toggle('hidden', isDefault);
+      }
+
       // Update UI based on state
       function updateUI() {
         el.apiSetup.classList.toggle('hidden', state.hasApiKey);
         el.generator.classList.toggle('hidden', !state.hasApiKey);
-
-        // Update pre-prompts dropdown
-        el.prepromptSelect.innerHTML = state.prePrompts.map(p =>
-          '<option value="' + p.id + '">' + p.name + '</option>'
-        ).join('');
-
-        // Update delete button visibility
-        const selectedId = el.prepromptSelect.value;
-        const isDefault = state.prePrompts.find(p => p.id === selectedId)?.isDefault ?? true;
-        el.deletePrepromptBtn.classList.toggle('hidden', isDefault);
 
         // Update selection indicator
         if (state.selection) {
           el.selectionIndicator.classList.remove('hidden');
           el.lineCount.textContent = state.selection.lineCount;
           el.generateSelectionBtn.classList.remove('hidden');
-          el.generateSelectionBtn.textContent = 'Generate from Selection (' + state.selection.lineCount + ' lines)';
+          el.generateSelectionBtn.textContent = 'Selection (' + state.selection.lineCount + ')';
         } else {
           el.selectionIndicator.classList.add('hidden');
           el.generateSelectionBtn.classList.add('hidden');
@@ -759,7 +757,7 @@ export class NanoBananaPanel {
         updateUI();
       });
 
-      el.prepromptSelect.addEventListener('change', updateUI);
+      el.prepromptSelect.addEventListener('change', updateDeleteButton);
 
       el.addPrepromptBtn.addEventListener('click', () => {
         el.addModal.classList.remove('hidden');
@@ -826,6 +824,7 @@ export class NanoBananaPanel {
             state.prePrompts = message.prePrompts;
             state.selection = message.selection;
             state.config = message.config;
+            updateDropdown();
             updateUI();
             break;
           case 'generating':
@@ -839,7 +838,7 @@ export class NanoBananaPanel {
             break;
           case 'prePromptsUpdated':
             state.prePrompts = message.prePrompts;
-            updateUI();
+            updateDropdown();
             break;
           case 'selectionChanged':
             state.selection = message.selection;
@@ -861,8 +860,6 @@ export class NanoBananaPanel {
   }
 
   private dispose(): void {
-    NanoBananaPanel.currentPanel = undefined;
-    this.panel.dispose();
     while (this.disposables.length) {
       const disposable = this.disposables.pop();
       if (disposable) {
