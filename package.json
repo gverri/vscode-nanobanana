@@ -1,0 +1,97 @@
+{
+  "name": "vscode-nanobanana",
+  "displayName": "Nano Banana",
+  "description": "Generate graphs and diagrams with Gemini AI inside VS Code",
+  "version": "0.0.1",
+  "publisher": "nanobanana",
+  "license": "MIT",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Visualization",
+    "Other"
+  ],
+  "keywords": [
+    "diagram",
+    "graph",
+    "flowchart",
+    "gemini",
+    "ai",
+    "visualization"
+  ],
+  "activationEvents": [],
+  "main": "./out/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "nanobanana.open",
+        "title": "Open Nano Banana",
+        "category": "Nano Banana"
+      },
+      {
+        "command": "nanobanana.generateWithSelection",
+        "title": "Generate Diagram from Selection",
+        "category": "Nano Banana"
+      },
+      {
+        "command": "nanobanana.setApiKey",
+        "title": "Set Gemini API Key",
+        "category": "Nano Banana"
+      }
+    ],
+    "configuration": {
+      "title": "Nano Banana",
+      "properties": {
+        "nanobanana.defaultAspectRatio": {
+          "type": "string",
+          "default": "16:9",
+          "enum": [
+            "1:1",
+            "3:4",
+            "4:3",
+            "9:16",
+            "16:9"
+          ],
+          "description": "Default aspect ratio for generated diagrams"
+        },
+        "nanobanana.defaultModel": {
+          "type": "string",
+          "default": "gemini-3-pro-image-preview",
+          "enum": [
+            "gemini-3-pro-image-preview"
+          ],
+          "description": "Default Gemini model for diagram generation"
+        }
+      }
+    },
+    "menus": {
+      "editor/context": [
+        {
+          "command": "nanobanana.generateWithSelection",
+          "when": "editorHasSelection",
+          "group": "nanobanana"
+        }
+      ]
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run build",
+    "build": "node esbuild.js",
+    "watch": "node esbuild.js --watch",
+    "lint": "eslint src --ext ts",
+    "package": "vsce package"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.0",
+    "@types/vscode": "^1.85.0",
+    "@typescript-eslint/eslint-plugin": "^6.13.0",
+    "@typescript-eslint/parser": "^6.13.0",
+    "esbuild": "^0.19.8",
+    "eslint": "^8.54.0",
+    "typescript": "^5.3.2"
+  },
+  "dependencies": {
+    "@google/genai": "^0.10.0"
+  }
+}
